@@ -1,5 +1,6 @@
 # 🎪 Westend Hackathon - 10-15 Perces Demo Script
 
+
 ## 🎯 Demo Áttekintés
 **Időtartam**: 12-15 perc  
 **Célcsoport**: Hackathon zsűri, befektetők, üzleti döntéshozók  
