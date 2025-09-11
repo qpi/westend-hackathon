@@ -16,6 +16,7 @@
 - **📊 Üzleti Modell**: Részletes ROI kalkuláció és skálázhatósági terv
 - **📋 Dokumentáció**: Prezentációs anyagok és implementációs útmutató
 - **🔮 Demo Script**: 10-15 perces hackathon prezentáció
+- **🎯 Új funkció**: Valódi historikus adatokból számított lag értékek!
 
 ### 💰 Üzleti Hatás (Példa számítás):
 - **Jelenlegi probléma**: €540K napi bevétel, 30% veszteség = €162K/nap

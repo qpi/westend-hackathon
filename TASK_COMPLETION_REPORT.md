@@ -165,6 +165,7 @@ Minden felvetett problémát sikeresen megoldottunk, a kért funkcionalitásokat
 3. ✅ **Teljes paraméter dokumentáció**
 4. ✅ **Időjárás hatás tudományos elemzése**
 5. ✅ **Felhasználóbarát időszak szűrés**
+6. ✅ **🎯 ÚJ: Valódi historikus adatokból számított lag értékek!**
 
 ---
 

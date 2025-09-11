@@ -3,6 +3,10 @@
 ## 🎯 Áttekintés
 Ez az útmutató részletesen bemutatja, hogyan futtassa és demonstrálja a Westend Hackathon bevásárlóközpont látogatószám előrejelző projektet.
 
+## 🎯 **ÚJ FUNKCIÓ**: Valódi Historikus Adatokból Számított Lag Értékek!
+
+A rendszer most már **valódi historikus adatokból** számítja ki az előző napi és 7 napos átlag értékeket, nem hardcode-olt átlagokat használ!
+
 ---
 
 ## 🛠️ 1. Környezet Előkészítés

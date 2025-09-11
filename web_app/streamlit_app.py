@@ -104,10 +104,26 @@ def load_results():
     except FileNotFoundError:
         return None
 
-def create_prediction_features(date, temperature, rainfall, is_holiday, 
-                             is_school_break, marketing_spend, scaler, 
-                             feature_columns):
-    """Előrejelzéshez szükséges jellemzők létrehozása és skálázása"""
+def create_prediction_features(date, temperature, rainfall, is_holiday,
+                             is_school_break, marketing_spend, scaler,
+                             feature_columns, historical_data=None):
+    """
+    Előrejelzéshez szükséges jellemzők létrehozása és skálázása
+
+    Args:
+        date: Predikció dátuma
+        temperature: Hőmérséklet (°C)
+        rainfall: Csapadék (mm)
+        is_holiday: Ünnepnap-e
+        is_school_break: Iskolai szünet van-e
+        marketing_spend: Marketing költés (EUR)
+        scaler: StandardScaler objektum
+        feature_columns: Használt jellemzők listája
+        historical_data: Historikus adatok DataFrame (opcionális)
+
+    Returns:
+        DataFrame: Skálázott jellemzők
+    """
     
     # Alapvető jellemzők
     features = {
@@ -135,11 +151,48 @@ def create_prediction_features(date, temperature, rainfall, is_holiday,
     features['hetvege_es_jo_ido'] = features['hetvege'] * (1 - features['hideg']) * (1 - features['esik'])
     features['unnep_es_marketing'] = features['unnepnap'] * features['magas_marketing']
     
-    # Lag jellemzők (átlagos értékekkel helyettesítjük)
-    features['latogatoszam_lag1'] = 10974  # átlagos látogatószám
-    features['atlaghomerseklet_lag1'] = temperature
-    features['latogatoszam_7d_avg'] = 10974
-    features['atlaghomerseklet_7d_avg'] = temperature
+    # Lag jellemzők - VALÓDI historikus adatokból számítása
+    if historical_data is not None and not historical_data.empty:
+        # Előző napi érték keresése
+        prev_date = pd.Timestamp(date) - pd.Timedelta(days=1)
+        prev_day_data = historical_data[historical_data['datum'] == prev_date]
+
+        if not prev_day_data.empty:
+            # Valódi előző napi értékek használata
+            features['latogatoszam_lag1'] = prev_day_data['latogatoszam'].values[0]
+            features['atlaghomerseklet_lag1'] = prev_day_data['atlaghomerseklet'].values[0]
+            print(f"📊 Valódi előző napi érték: {features['latogatoszam_lag1']:.0f} fő ({prev_date.strftime('%Y-%m-%d')})")
+        else:
+            # Ha nincs adat az előző napra, használjuk az átlagot
+            features['latogatoszam_lag1'] = historical_data['latogatoszam'].mean()
+            features['atlaghomerseklet_lag1'] = historical_data['atlaghomerseklet'].mean()
+            print(f"⚠️ Nincs adat az előző napra, átlag használata: {features['latogatoszam_lag1']:.0f} fő")
+
+        # 7 napos átlag számítása
+        week_start = pd.Timestamp(date) - pd.Timedelta(days=7)
+        week_end = pd.Timestamp(date)
+        week_data = historical_data[
+            (historical_data['datum'] >= week_start) &
+            (historical_data['datum'] < week_end)
+        ]
+
+        if not week_data.empty and len(week_data) >= 3:
+            # Valódi 7 napos átlag használata
+            features['latogatoszam_7d_avg'] = week_data['latogatoszam'].mean()
+            features['atlaghomerseklet_7d_avg'] = week_data['atlaghomerseklet'].mean()
+            print(f"📊 Valódi 7 napos átlag: {features['latogatoszam_7d_avg']:.0f} fő ({len(week_data)} nap adata alapján)")
+        else:
+            # Ha nincs elég adat, használjuk az átlagot
+            features['latogatoszam_7d_avg'] = historical_data['latogatoszam'].mean()
+            features['atlaghomerseklet_7d_avg'] = historical_data['atlaghomerseklet'].mean()
+            print(f"⚠️ Nincs elég 7 napos adat, átlag használata: {features['latogatoszam_7d_avg']:.0f} fő")
+    else:
+        # Ha nincs historikus adat, használjuk az általános átlagokat
+        features['latogatoszam_lag1'] = 10974  # általános átlag
+        features['atlaghomerseklet_lag1'] = temperature
+        features['latogatoszam_7d_avg'] = 10974  # általános átlag
+        features['atlaghomerseklet_7d_avg'] = temperature
+        print("⚠️ Nincs historikus adat, általános átlagok használata")
     
     # Hét napjai (one-hot encoding)
     for i in range(1, 8):
@@ -215,7 +268,7 @@ def prediction_page(model, data, scaler, feature_columns):
         prediction_date = st.date_input(
             "Válasszon dátumot:",
             value=datetime.now().date(),
-            min_value=datetime(2024, 1, 1).date(),
+            min_value=data['datum'].min().date(),
             max_value=datetime(2025, 12, 31).date()
         )
         
@@ -244,14 +297,20 @@ def prediction_page(model, data, scaler, feature_columns):
             min_value=0, max_value=1000, value=300, step=10
         )
     
+    # Figyelmeztetés jövőbeli dátumok esetén
+    if prediction_date > data['datum'].max().date():
+        st.warning(f"⚠️ **Figyelmeztetés:** {prediction_date} dátuma kívül esik az elérhető historikus adatok tartományán ({data['datum'].min().date()} - {data['datum'].max().date()}).\n\nA predikció általános átlagokat fog használni a lag értékek helyett.")
+    elif prediction_date < data['datum'].min().date():
+        st.info(f"ℹ️ **Információ:** {prediction_date} dátuma a rendelkezésre álló adatok előtt van. A predikció általános átlagokat fog használni.")
+
     # Előrejelzés gomb
     if st.button("🔮 Látogatószám Előrejelzése", type="primary"):
         
         # Jellemzők létrehozása
         features_df = create_prediction_features(
-            prediction_date, temperature, rainfall, 
+            prediction_date, temperature, rainfall,
             is_holiday, is_school_break, marketing_spend,
-            scaler, feature_columns
+            scaler, feature_columns, data  # ✅ Historikus adatok átadása
         )
         
         # Előrejelzés
