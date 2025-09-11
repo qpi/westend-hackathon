@@ -391,17 +391,18 @@ class MLModels:
         plt.savefig('outputs/residual_analysis.png', dpi=300, bbox_inches='tight')
         plt.show()
     
-    def save_models(self, best_model_name=None):
+    def save_models(self, best_model_name=None, data_prep=None):
         """
         Modellek mentése
-        
+
         Args:
             best_model_name: Legjobb modell neve (ha None, akkor az összes)
+            data_prep: DataPreparation objektum a scaler mentéséhez
         """
         print("💾 Modellek mentése...")
-        
+
         os.makedirs('models', exist_ok=True)
-        
+
         if best_model_name:
             # Csak a legjobb modell mentése
             model = self.trained_models[best_model_name]
@@ -414,7 +415,13 @@ class MLModels:
                 filename = f'models/model_{name.replace(" ", "_").lower()}.joblib'
                 joblib.dump(model, filename)
             print(f"✅ {len(self.trained_models)} modell mentve")
-        
+
+        # Scaler mentése ha van
+        if data_prep and hasattr(data_prep, 'scaler'):
+            scaler_filename = 'models/scaler.joblib'
+            joblib.dump(data_prep.scaler, scaler_filename)
+            print(f"✅ Scaler mentve: {scaler_filename}")
+
         # Eredmények mentése
         results_df = pd.DataFrame(self.results).T
         results_df.to_csv('outputs/model_results.csv')
@@ -456,7 +463,7 @@ class MLModels:
         self.create_visualizations(y_test, feature_names)
         
         # 8. Modellek mentése
-        self.save_models(best_model_name)
+        self.save_models(best_model_name, data_prep)
         
         print(f"\n🎯 Machine Learning Pipeline befejezve!")
         print(f"🏆 Legjobb modell: {best_model_name}")

@@ -91,6 +91,16 @@ def load_model():
         st.error("Modell fájl nem található! Futtassa előbb a machine_learning_models.py scriptet.")
         return None
 
+@st.cache_resource
+def load_scaler():
+    """Scaler betöltése cache-elve"""
+    try:
+        scaler = joblib.load('models/scaler.joblib')
+        return scaler
+    except FileNotFoundError:
+        st.error("Scaler fájl nem található! Futtassa előbb a machine_learning_models.py scriptet.")
+        return None
+
 @st.cache_data
 def load_results():
     """Modell eredmények betöltése"""
@@ -100,7 +110,7 @@ def load_results():
     except FileNotFoundError:
         return None
 
-def create_prediction_features(date, temperature, rainfall, is_holiday, is_school_break, marketing_spend):
+def create_prediction_features(date, temperature, rainfall, is_holiday, is_school_break, marketing_spend, scaler=None):
     """Előrejelzéshez szükséges jellemzők létrehozása"""
     
     # Alapvető jellemzők
@@ -156,8 +166,19 @@ def create_prediction_features(date, temperature, rainfall, is_holiday, is_schoo
     
     for i in range(1, 5):
         features[f'szezon_{i}'] = int(season == i)
-    
-    return pd.DataFrame([features])
+
+    # DataFrame létrehozása
+    df = pd.DataFrame([features])
+
+    # Skálázás alkalmazása ha van scaler
+    if scaler is not None:
+        # Numerikus oszlopok azonosítása
+        numeric_columns = df.select_dtypes(include=[np.number]).columns
+        df_scaled = df.copy()
+        df_scaled[numeric_columns] = scaler.transform(df[numeric_columns])
+        return df_scaled
+
+    return df
 
 def main():
     # Főcím
@@ -166,9 +187,10 @@ def main():
     # Adatok és modell betöltése
     data = load_data()
     model = load_model()
+    scaler = load_scaler()
     results = load_results()
-    
-    if data is None or model is None:
+
+    if data is None or model is None or scaler is None:
         st.stop()
     
     # Sidebar - Navigáció
@@ -179,7 +201,7 @@ def main():
     )
     
     if page == "🎯 Előrejelzés":
-        prediction_page(model, data)
+        prediction_page(model, data, scaler)
     elif page == "📈 Adatok Áttekintése":
         data_overview_page(data)
     elif page == "🤖 Modell Teljesítmény":
@@ -187,7 +209,7 @@ def main():
     elif page == "📊 Vizualizációk":
         visualizations_page(data)
 
-def prediction_page(model, data):
+def prediction_page(model, data, scaler):
     """Előrejelzés oldal"""
     st.header("🎯 Látogatószám Előrejelzés")
     
@@ -233,8 +255,8 @@ def prediction_page(model, data):
         
         # Jellemzők létrehozása
         features_df = create_prediction_features(
-            prediction_date, temperature, rainfall, 
-            is_holiday, is_school_break, marketing_spend
+            prediction_date, temperature, rainfall,
+            is_holiday, is_school_break, marketing_spend, scaler
         )
         
         # Előrejelzés

@@ -78,7 +78,7 @@ def main():
         print(f"\n💾 6. LÉPÉS: MODELLEK MENTÉSE")
         print("-" * 40)
         
-        ml_models.save_models(best_model_name)
+        ml_models.save_models(best_model_name, data_prep)
         
         # 7. Összefoglaló
         print(f"\n🎯 MODELL LÉTREHOZÁS BEFEJEZVE!")
