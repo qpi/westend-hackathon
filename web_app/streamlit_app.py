@@ -263,23 +263,59 @@ def prediction_page(model, data, scaler, feature_columns):
             st.markdown('<div class="prediction-result">', unsafe_allow_html=True)
             st.markdown(f"### 🎯 Előrejelzett látogatószám: **{prediction:,.0f} fő**")
             
-            # Kontextus információk
-            avg_visitors = data['latogatoszam'].mean()
-            difference = prediction - avg_visitors
-            percentage_diff = (difference / avg_visitors) * 100
+            # Kontextus információk - KONTEXTUÁLIS ÁTLAG használata
+            global_avg = data['latogatoszam'].mean()
+            
+            # Kontextuális átlag kiszámítása
+            if is_holiday:
+                # Ünnepnapi átlag
+                context_avg = data[data['unnepnap'] == 1]['latogatoszam'].mean() if 'unnepnap' in data.columns else global_avg * 1.9
+                context_type = "ünnepnapi"
+            elif prediction_date.weekday() >= 5:
+                # Hétvégi átlag
+                context_avg = data[data['hetvege'] == 1]['latogatoszam'].mean() if 'hetvege' in data.columns else global_avg * 1.4
+                context_type = "hétvégi"
+            else:
+                # Hétköznapi átlag
+                context_avg = data[data['hetvege'] == 0]['latogatoszam'].mean() if 'hetvege' in data.columns else global_avg * 0.82
+                context_type = "hétköznapi"
+            
+            # Eltérések számítása
+            difference_from_global = prediction - global_avg
+            difference_from_context = prediction - context_avg
+            percentage_diff_global = (difference_from_global / global_avg) * 100
+            percentage_diff_context = (difference_from_context / context_avg) * 100
             
             col1, col2, col3 = st.columns(3)
             with col1:
-                st.metric("Előrejelzés", f"{prediction:,.0f}", f"{difference:+.0f}")
+                st.metric("Előrejelzés", f"{prediction:,.0f}", f"{difference_from_context:+.0f}")
             with col2:
-                st.metric("Átlagtól való eltérés", f"{percentage_diff:+.1f}%")
+                st.metric(f"{context_type.capitalize()} átlagtól", 
+                         f"{percentage_diff_context:+.1f}%",
+                         help=f"Átlagos {context_type} látogatószám: {context_avg:,.0f} fő")
             with col3:
-                if prediction > avg_visitors:
-                    st.success("🟢 Átlag feletti látogatottság")
+                if percentage_diff_context > 10:
+                    st.success(f"🟢 {context_type.capitalize()} átlag felett")
+                elif percentage_diff_context < -10:
+                    st.warning(f"🟡 {context_type.capitalize()} átlag alatt")
                 else:
-                    st.info("🔵 Átlag alatti látogatottság")
+                    st.info(f"🔵 Átlagos {context_type} forgalom")
             
             st.markdown('</div>', unsafe_allow_html=True)
+            
+            # Részletes kontextus információ
+            with st.expander("📊 Részletes statisztikák"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.write("**Kontextuális összehasonlítás:**")
+                    st.write(f"• {context_type.capitalize()} átlag: {context_avg:,.0f} fő")
+                    st.write(f"• Eltérés: {percentage_diff_context:+.1f}%")
+                    st.write(f"• Különbség: {difference_from_context:+,.0f} fő")
+                with col2:
+                    st.write("**Globális összehasonlítás:**")
+                    st.write(f"• Teljes átlag: {global_avg:,.0f} fő")
+                    st.write(f"• Eltérés: {percentage_diff_global:+.1f}%")
+                    st.write(f"• Különbség: {difference_from_global:+,.0f} fő")
             
             # Tényezők hatása
             st.markdown("### 📊 Befolyásoló Tényezők")
