@@ -304,6 +304,13 @@ class DataPreparation:
         X_scaled = X.copy()
         X_scaled[numeric_columns] = self.scaler.fit_transform(X[numeric_columns])
         
+        # Scaler mentése későbbi használatra
+        import joblib
+        import os
+        os.makedirs('models', exist_ok=True)
+        joblib.dump(self.scaler, 'models/scaler.joblib')
+        print("💾 Scaler mentve: models/scaler.joblib")
+        
         print(f"✅ {X_scaled.shape[1]} jellemző és {len(y)} minta elkészítve")
         return X_scaled, y, feature_columns
     
