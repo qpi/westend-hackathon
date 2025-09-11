@@ -9,12 +9,12 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+# import plotly.graph_objects as go
+# from plotly.subplots import make_subplots
 import joblib
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -26,15 +26,11 @@ sys.path.insert(0, parent_dir)
 try:
     # Import módosítása a helyes útvonal használatához
     sys.path.insert(0, os.path.join(parent_dir, 'src'))
-    import data_preparation
-    import machine_learning_models
     from data_preparation import DataPreparation
-    from machine_learning_models import MLModels
 except ImportError as e:
     st.error(f"Modul importálási hiba: {e}")
     st.error("📁 Ellenőrizze, hogy a src könyvtárban vannak-e a szükséges Python fájlok:")
     st.error("   - src/data_preparation.py")
-    st.error("   - src/machine_learning_models.py")
     st.stop()
 
 # Oldal konfiguráció
@@ -82,14 +78,22 @@ def load_data():
         return None
 
 @st.cache_resource
-def load_model():
-    """Modell betöltése cache-elve"""
+def load_model_and_scaler():
+    """Modell és scaler betöltése cache-elve"""
     try:
         model = joblib.load('models/best_model_random_forest.joblib')
-        return model
+        
+        # Scaler újra létrehozása a training adatokból
+        data_prep = DataPreparation()
+        df = data_prep.load_and_clean_data('data/hackathon_data.csv')
+        df = data_prep.create_features(df)
+        df = data_prep.encode_categorical(df)
+        X, y, feature_columns = data_prep.prepare_features_target(df)
+        
+        return model, data_prep.scaler, feature_columns
     except FileNotFoundError:
         st.error("Modell fájl nem található! Futtassa előbb a machine_learning_models.py scriptet.")
-        return None
+        return None, None, None
 
 @st.cache_data
 def load_results():
@@ -100,8 +104,10 @@ def load_results():
     except FileNotFoundError:
         return None
 
-def create_prediction_features(date, temperature, rainfall, is_holiday, is_school_break, marketing_spend):
-    """Előrejelzéshez szükséges jellemzők létrehozása"""
+def create_prediction_features(date, temperature, rainfall, is_holiday, 
+                             is_school_break, marketing_spend, scaler, 
+                             feature_columns):
+    """Előrejelzéshez szükséges jellemzők létrehozása és skálázása"""
     
     # Alapvető jellemzők
     features = {
@@ -157,7 +163,16 @@ def create_prediction_features(date, temperature, rainfall, is_holiday, is_schoo
     for i in range(1, 5):
         features[f'szezon_{i}'] = int(season == i)
     
-    return pd.DataFrame([features])
+    # DataFrame létrehozása helyes oszlop sorrenddel
+    df = pd.DataFrame([features])
+    df = df[feature_columns]  # Helyes sorrend biztosítása
+    
+    # Numerikus oszlopok skálázása
+    numeric_columns = df.select_dtypes(include=[np.number]).columns
+    df_scaled = df.copy()
+    df_scaled[numeric_columns] = scaler.transform(df[numeric_columns])
+    
+    return df_scaled
 
 def main():
     # Főcím
@@ -165,10 +180,10 @@ def main():
     
     # Adatok és modell betöltése
     data = load_data()
-    model = load_model()
+    model, scaler, feature_columns = load_model_and_scaler()
     results = load_results()
     
-    if data is None or model is None:
+    if data is None or model is None or scaler is None:
         st.stop()
     
     # Sidebar - Navigáció
@@ -179,7 +194,7 @@ def main():
     )
     
     if page == "🎯 Előrejelzés":
-        prediction_page(model, data)
+        prediction_page(model, data, scaler, feature_columns)
     elif page == "📈 Adatok Áttekintése":
         data_overview_page(data)
     elif page == "🤖 Modell Teljesítmény":
@@ -187,7 +202,7 @@ def main():
     elif page == "📊 Vizualizációk":
         visualizations_page(data)
 
-def prediction_page(model, data):
+def prediction_page(model, data, scaler, feature_columns):
     """Előrejelzés oldal"""
     st.header("🎯 Látogatószám Előrejelzés")
     
@@ -212,7 +227,8 @@ def prediction_page(model, data):
         
         rainfall = st.slider(
             "Csapadék (mm):",
-            min_value=0.0, max_value=50.0, value=0.0, step=0.1
+            min_value=0.0, max_value=100.0, value=0.0, step=0.5,
+            help="0mm = száraz idő, 5-10mm = enyhe eső, 10-20mm = közepes eső, 20-50mm = erős eső, 50mm+ = viharos idő"
         )
     
     with col2:
@@ -234,7 +250,8 @@ def prediction_page(model, data):
         # Jellemzők létrehozása
         features_df = create_prediction_features(
             prediction_date, temperature, rainfall, 
-            is_holiday, is_school_break, marketing_spend
+            is_holiday, is_school_break, marketing_spend,
+            scaler, feature_columns
         )
         
         # Előrejelzés
@@ -287,8 +304,14 @@ def prediction_page(model, data):
                     st.write("• 🥶 Fagyos idő (-30% várható)")
                 elif temperature > 30:
                     st.write("• 🔥 Túl meleg (-20% várható)")
-                if rainfall > 5:
-                    st.write("• 🌧️ Erős eső (-40% várható)")
+                if rainfall > 20:
+                    st.write(f"• 🌧️ Viharos eső ({rainfall:.1f}mm, -50% várható)")
+                elif rainfall > 10:
+                    st.write(f"• 🌧️ Erős eső ({rainfall:.1f}mm, -40% várható)")
+                elif rainfall > 5:
+                    st.write(f"• 🌧️ Közepes eső ({rainfall:.1f}mm, -25% várható)")
+                elif rainfall > 1:
+                    st.write(f"• 🌧️ Enyhe eső ({rainfall:.1f}mm, -10% várható)")
                 if prediction_date.weekday() < 5 and not is_holiday:
                     st.write("• 📅 Hétköznap")
                 if marketing_spend < 200:
@@ -301,53 +324,125 @@ def data_overview_page(data):
     """Adatok áttekintése oldal"""
     st.header("📈 Adatok Áttekintése")
     
-    # Alapstatisztikák
+    # Dátum tartomány kiválasztás
+    st.subheader("📅 Időszak Kiválasztása")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        start_date = st.date_input(
+            "Kezdő dátum:",
+            value=data['datum'].min(),
+            min_value=data['datum'].min(),
+            max_value=data['datum'].max()
+        )
+    
+    with col2:
+        end_date = st.date_input(
+            "Záró dátum:",
+            value=data['datum'].max(),
+            min_value=data['datum'].min(),
+            max_value=data['datum'].max()
+        )
+    
+    # Adatok szűrése a kiválasztott dátum tartományra
+    filtered_data = data[
+        (data['datum'] >= pd.to_datetime(start_date)) & 
+        (data['datum'] <= pd.to_datetime(end_date))
+    ]
+    
+    if len(filtered_data) == 0:
+        st.warning("Nincs adat a kiválasztott időszakban!")
+        return
+    
+    # Alapstatisztikák a szűrt adatokra
+    st.subheader(f"📊 Statisztikák ({start_date} - {end_date})")
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.metric("Összes nap", f"{len(data):,}")
+        st.metric("Napok száma", f"{len(filtered_data):,}")
     with col2:
-        st.metric("Átlagos látogatószám", f"{data['latogatoszam'].mean():,.0f}")
+        st.metric("Átlagos látogatószám", 
+                 f"{filtered_data['latogatoszam'].mean():,.0f}")
     with col3:
-        st.metric("Maximum látogatószám", f"{data['latogatoszam'].max():,.0f}")
+        st.metric("Maximum látogatószám", 
+                 f"{filtered_data['latogatoszam'].max():,.0f}")
     with col4:
-        st.metric("Minimum látogatószám", f"{data['latogatoszam'].min():,.0f}")
+        st.metric("Minimum látogatószám", 
+                 f"{filtered_data['latogatoszam'].min():,.0f}")
     
     # Idősor grafikon
     st.subheader("📅 Látogatószám Idősor")
     
-    fig = px.line(data, x='datum', y='latogatoszam', 
-                  title='Napi Látogatószám Alakulása')
+    fig = px.line(filtered_data, x='datum', y='latogatoszam', 
+                  title=f'Napi Látogatószám Alakulása ({start_date} - {end_date})')
     fig.update_layout(height=400)
     st.plotly_chart(fig, use_container_width=True)
     
-    # Heti és havi mintázatok
+    # Heti és havi mintázatok a szűrt adatokra
     col1, col2 = st.columns(2)
     
     with col1:
         # Heti mintázat
-        weekly_data = data.groupby('het_napja')['latogatoszam'].mean().reset_index()
-        days = ['Hétfő', 'Kedd', 'Szerda', 'Csütörtök', 'Péntek', 'Szombat', 'Vasárnap']
-        weekly_data['nap_neve'] = [days[i-1] for i in weekly_data['het_napja']]
-        
-        fig_weekly = px.bar(weekly_data, x='nap_neve', y='latogatoszam',
-                           title='Átlagos Látogatószám Napok Szerint')
-        st.plotly_chart(fig_weekly, use_container_width=True)
+        if 'het_napja' in filtered_data.columns:
+            weekly_data = filtered_data.groupby('het_napja')['latogatoszam'].mean().reset_index()
+            days = ['Hétfő', 'Kedd', 'Szerda', 'Csütörtök', 'Péntek', 'Szombat', 'Vasárnap']
+            weekly_data['nap_neve'] = [days[i-1] for i in weekly_data['het_napja']]
+            
+            fig_weekly = px.bar(weekly_data, x='nap_neve', y='latogatoszam',
+                               title='Átlagos Látogatószám Napok Szerint (Szűrt Időszak)')
+            st.plotly_chart(fig_weekly, use_container_width=True)
     
     with col2:
         # Havi mintázat
-        monthly_data = data.groupby('honap')['latogatoszam'].mean().reset_index()
-        months = ['Jan', 'Feb', 'Már', 'Ápr', 'Máj', 'Jún', 
-                 'Júl', 'Aug', 'Szep', 'Okt', 'Nov', 'Dec']
-        monthly_data['honap_neve'] = [months[i-1] for i in monthly_data['honap']]
-        
-        fig_monthly = px.bar(monthly_data, x='honap_neve', y='latogatoszam',
-                            title='Átlagos Látogatószám Hónapok Szerint')
-        st.plotly_chart(fig_monthly, use_container_width=True)
+        if 'honap' in filtered_data.columns:
+            monthly_data = filtered_data.groupby('honap')['latogatoszam'].mean().reset_index()
+            months = ['Jan', 'Feb', 'Már', 'Ápr', 'Máj', 'Jún', 
+                     'Júl', 'Aug', 'Szep', 'Okt', 'Nov', 'Dec']
+            monthly_data['honap_neve'] = [months[i-1] for i in monthly_data['honap']]
+            
+            fig_monthly = px.bar(monthly_data, x='honap_neve', y='latogatoszam',
+                                title='Átlagos Látogatószám Hónapok Szerint (Szűrt Időszak)')
+            st.plotly_chart(fig_monthly, use_container_width=True)
+    
+    # Időjárási összefüggések a szűrt időszakra
+    st.subheader("🌤️ Időjárási Összefüggések")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Hőmérséklet vs látogatószám
+        fig_temp = px.scatter(filtered_data, x='atlaghomerseklet', y='latogatoszam',
+                             title='Hőmérséklet vs Látogatószám (Szűrt Időszak)',
+                             trendline="ols")
+        st.plotly_chart(fig_temp, use_container_width=True)
+    
+    with col2:
+        # Marketing vs látogatószám
+        fig_marketing = px.scatter(filtered_data, x='marketing_kiadas', y='latogatoszam',
+                                  title='Marketing Kiadás vs Látogatószám (Szűrt Időszak)',
+                                  trendline="ols")
+        st.plotly_chart(fig_marketing, use_container_width=True)
     
     # Adatok táblázat
-    st.subheader("📋 Adatok Táblázat")
-    st.dataframe(data.head(100), use_container_width=True)
+    st.subheader("📋 Adatok Táblázat (Szűrt Időszak)")
+    
+    # Oszlopok kiválasztása megjelenítéshez
+    display_columns = ['datum', 'latogatoszam', 'atlaghomerseklet', 'csapadek', 
+                      'marketing_kiadas', 'hetvege', 'unnepnap']
+    available_columns = [col for col in display_columns if col in filtered_data.columns]
+    
+    st.dataframe(
+        filtered_data[available_columns].head(min(100, len(filtered_data))), 
+        use_container_width=True
+    )
+    
+    # Összefoglaló statisztikák
+    st.subheader("📊 Részletes Statisztikák")
+    numeric_columns = filtered_data.select_dtypes(include=[np.number]).columns
+    if len(numeric_columns) > 0:
+        st.dataframe(
+            filtered_data[numeric_columns].describe().round(2), 
+            use_container_width=True
+        )
 
 def model_performance_page(results):
     """Modell teljesítmény oldal"""
@@ -410,17 +505,54 @@ def visualizations_page(data):
     """Vizualizációk oldal"""
     st.header("📊 Részletes Vizualizációk")
     
+    # Dátum tartomány kiválasztás
+    st.subheader("📅 Időszak Kiválasztása a Vizualizációkhoz")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        start_date = st.date_input(
+            "Kezdő dátum:",
+            value=data['datum'].min(),
+            min_value=data['datum'].min(),
+            max_value=data['datum'].max(),
+            key="viz_start_date"
+        )
+    
+    with col2:
+        end_date = st.date_input(
+            "Záró dátum:",
+            value=data['datum'].max(),
+            min_value=data['datum'].min(),
+            max_value=data['datum'].max(),
+            key="viz_end_date"
+        )
+    
+    # Adatok szűrése
+    filtered_data = data[
+        (data['datum'] >= pd.to_datetime(start_date)) & 
+        (data['datum'] <= pd.to_datetime(end_date))
+    ]
+    
+    if len(filtered_data) == 0:
+        st.warning("Nincs adat a kiválasztott időszakban!")
+        return
+    
+    st.info(f"📊 Vizualizációk {len(filtered_data)} napra ({start_date} - {end_date})")
+    
     # Korrelációs heatmap
     st.subheader("🔥 Korrelációs Heatmap")
     
     numeric_cols = ['latogatoszam', 'atlaghomerseklet', 'csapadek', 'marketing_kiadas']
-    corr_matrix = data[numeric_cols].corr()
+    available_numeric_cols = [col for col in numeric_cols if col in filtered_data.columns]
     
-    fig_heatmap = px.imshow(corr_matrix, 
-                           text_auto=True, 
-                           aspect="auto",
-                           title="Változók Közötti Korreláció")
-    st.plotly_chart(fig_heatmap, use_container_width=True)
+    if len(available_numeric_cols) > 1:
+        corr_matrix = filtered_data[available_numeric_cols].corr()
+        
+        fig_heatmap = px.imshow(corr_matrix, 
+                               text_auto=True, 
+                               aspect="auto",
+                               title=f"Változók Közötti Korreláció ({start_date} - {end_date})")
+        st.plotly_chart(fig_heatmap, use_container_width=True)
     
     # Időjárás hatása
     st.subheader("🌤️ Időjárás Hatása")
@@ -429,40 +561,70 @@ def visualizations_page(data):
     
     with col1:
         # Hőmérséklet vs látogatószám
-        fig_temp = px.scatter(data, x='atlaghomerseklet', y='latogatoszam',
-                             title='Hőmérséklet vs Látogatószám',
-                             trendline="ols")
-        st.plotly_chart(fig_temp, use_container_width=True)
+        if 'atlaghomerseklet' in filtered_data.columns:
+            fig_temp = px.scatter(filtered_data, x='atlaghomerseklet', y='latogatoszam',
+                                 title=f'Hőmérséklet vs Látogatószám ({start_date} - {end_date})',
+                                 trendline="ols")
+            st.plotly_chart(fig_temp, use_container_width=True)
     
     with col2:
         # Csapadék hatása
-        data['esik'] = data['csapadek'] > 1
-        rain_effect = data.groupby('esik')['latogatoszam'].mean().reset_index()
-        rain_effect['esik'] = rain_effect['esik'].map({True: 'Esős', False: 'Száraz'})
-        
-        fig_rain = px.bar(rain_effect, x='esik', y='latogatoszam',
-                         title='Csapadék Hatása a Látogatószámra')
-        st.plotly_chart(fig_rain, use_container_width=True)
+        if 'csapadek' in filtered_data.columns:
+            filtered_data_copy = filtered_data.copy()
+            filtered_data_copy['esik'] = filtered_data_copy['csapadek'] > 1
+            rain_effect = filtered_data_copy.groupby('esik')['latogatoszam'].mean().reset_index()
+            rain_effect['esik'] = rain_effect['esik'].map({True: 'Esős', False: 'Száraz'})
+            
+            fig_rain = px.bar(rain_effect, x='esik', y='latogatoszam',
+                             title=f'Csapadék Hatása a Látogatószámra ({start_date} - {end_date})')
+            st.plotly_chart(fig_rain, use_container_width=True)
     
     # Marketing hatás
     st.subheader("📢 Marketing Hatás")
     
-    # Marketing költés vs látogatószám
-    fig_marketing = px.scatter(data, x='marketing_kiadas', y='latogatoszam',
-                              title='Marketing Kiadás vs Látogatószám',
-                              trendline="ols")
-    st.plotly_chart(fig_marketing, use_container_width=True)
+    if 'marketing_kiadas' in filtered_data.columns:
+        # Marketing költés vs látogatószám
+        fig_marketing = px.scatter(filtered_data, x='marketing_kiadas', y='latogatoszam',
+                                  title=f'Marketing Kiadás vs Látogatószám ({start_date} - {end_date})',
+                                  trendline="ols")
+        st.plotly_chart(fig_marketing, use_container_width=True)
     
     # Szezonális mintázatok
     st.subheader("🍂 Szezonális Mintázatok")
     
-    seasonal_data = data.groupby('szezon')['latogatoszam'].mean().reset_index()
-    seasons = {1: 'Tél', 2: 'Tavasz', 3: 'Nyár', 4: 'Ősz'}
-    seasonal_data['szezon_neve'] = seasonal_data['szezon'].map(seasons)
+    if 'szezon' in filtered_data.columns:
+        seasonal_data = filtered_data.groupby('szezon')['latogatoszam'].mean().reset_index()
+        seasons = {1: 'Tél', 2: 'Tavasz', 3: 'Nyár', 4: 'Ősz'}
+        seasonal_data['szezon_neve'] = seasonal_data['szezon'].map(seasons)
+        
+        fig_seasonal = px.bar(seasonal_data, x='szezon_neve', y='latogatoszam',
+                             title=f'Átlagos Látogatószám Évszakok Szerint ({start_date} - {end_date})')
+        st.plotly_chart(fig_seasonal, use_container_width=True)
     
-    fig_seasonal = px.bar(seasonal_data, x='szezon_neve', y='latogatoszam',
-                         title='Átlagos Látogatószám Évszakok Szerint')
-    st.plotly_chart(fig_seasonal, use_container_width=True)
+    # Hétvége vs hétköznap összehasonlítás
+    st.subheader("📅 Hétvége vs Hétköznap")
+    
+    if 'hetvege' in filtered_data.columns:
+        weekend_data = filtered_data.groupby('hetvege')['latogatoszam'].mean().reset_index()
+        weekend_data['nap_tipus'] = weekend_data['hetvege'].map({0: 'Hétköznap', 1: 'Hétvége'})
+        
+        fig_weekend = px.bar(weekend_data, x='nap_tipus', y='latogatoszam',
+                            title=f'Hétvége vs Hétköznap Látogatottság ({start_date} - {end_date})')
+        st.plotly_chart(fig_weekend, use_container_width=True)
+    
+    # Időszakos trendek
+    st.subheader("📈 Időszakos Trendek")
+    
+    if len(filtered_data) > 30:  # Csak ha elegendő adat van
+        # Havi trend
+        filtered_data_copy = filtered_data.copy()
+        filtered_data_copy['year_month'] = filtered_data_copy['datum'].dt.to_period('M').astype(str)
+        monthly_trend = filtered_data_copy.groupby('year_month')['latogatoszam'].mean().reset_index()
+        
+        fig_trend = px.line(monthly_trend, x='year_month', y='latogatoszam',
+                           title=f'Havi Átlagos Látogatottság Trend ({start_date} - {end_date})')
+        fig_trend.update_xaxes(tickangle=45)
+        st.plotly_chart(fig_trend, use_container_width=True)
 
 if __name__ == "__main__":
     main()
