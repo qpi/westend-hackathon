@@ -70,9 +70,11 @@ st.markdown("""
 def load_data():
     """Adatok betöltése cache-elve"""
     try:
-        df = pd.read_csv('data/hackathon_data.csv')
-        df['datum'] = pd.to_datetime(df['datum'])
-        return df
+        # Use extended dataset if generated
+        data_path = 'data/hackathon_data_full.csv' if os.path.exists('data/hackathon_data_full.csv') else 'data/hackathon_data.csv'
+        data = pd.read_csv(data_path)
+        data['datum'] = pd.to_datetime(data['datum'])
+        return data
     except FileNotFoundError:
         st.error("Adatfájl nem található! Futtassa előbb a data_preparation.py scriptet.")
         return None
