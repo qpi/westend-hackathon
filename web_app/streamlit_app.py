@@ -70,9 +70,11 @@ st.markdown("""
 def load_data():
     """Adatok betöltése cache-elve"""
     try:
-        df = pd.read_csv('data/hackathon_data.csv')
-        df['datum'] = pd.to_datetime(df['datum'])
-        return df
+        # Use extended dataset if generated
+        data_path = 'data/hackathon_data_full.csv' if os.path.exists('data/hackathon_data_full.csv') else 'data/hackathon_data.csv'
+        data = pd.read_csv(data_path)
+        data['datum'] = pd.to_datetime(data['datum'])
+        return data
     except FileNotFoundError:
         st.error("Adatfájl nem található! Futtassa előbb a data_preparation.py scriptet.")
         return None
@@ -104,10 +106,26 @@ def load_results():
     except FileNotFoundError:
         return None
 
-def create_prediction_features(date, temperature, rainfall, is_holiday, 
-                             is_school_break, marketing_spend, scaler, 
-                             feature_columns):
-    """Előrejelzéshez szükséges jellemzők létrehozása és skálázása"""
+def create_prediction_features(date, temperature, rainfall, is_holiday,
+                             is_school_break, marketing_spend, scaler,
+                             feature_columns, historical_data=None):
+    """
+    Előrejelzéshez szükséges jellemzők létrehozása és skálázása
+
+    Args:
+        date: Predikció dátuma
+        temperature: Hőmérséklet (°C)
+        rainfall: Csapadék (mm)
+        is_holiday: Ünnepnap-e
+        is_school_break: Iskolai szünet van-e
+        marketing_spend: Marketing költés (EUR)
+        scaler: StandardScaler objektum
+        feature_columns: Használt jellemzők listája
+        historical_data: Historikus adatok DataFrame (opcionális)
+
+    Returns:
+        DataFrame: Skálázott jellemzők
+    """
     
     # Alapvető jellemzők
     features = {
@@ -135,11 +153,48 @@ def create_prediction_features(date, temperature, rainfall, is_holiday,
     features['hetvege_es_jo_ido'] = features['hetvege'] * (1 - features['hideg']) * (1 - features['esik'])
     features['unnep_es_marketing'] = features['unnepnap'] * features['magas_marketing']
     
-    # Lag jellemzők (átlagos értékekkel helyettesítjük)
-    features['latogatoszam_lag1'] = 10974  # átlagos látogatószám
-    features['atlaghomerseklet_lag1'] = temperature
-    features['latogatoszam_7d_avg'] = 10974
-    features['atlaghomerseklet_7d_avg'] = temperature
+    # Lag jellemzők - VALÓDI historikus adatokból számítása
+    if historical_data is not None and not historical_data.empty:
+        # Előző napi érték keresése
+        prev_date = pd.Timestamp(date) - pd.Timedelta(days=1)
+        prev_day_data = historical_data[historical_data['datum'] == prev_date]
+
+        if not prev_day_data.empty:
+            # Valódi előző napi értékek használata
+            features['latogatoszam_lag1'] = prev_day_data['latogatoszam'].values[0]
+            features['atlaghomerseklet_lag1'] = prev_day_data['atlaghomerseklet'].values[0]
+            print(f"📊 Valódi előző napi érték: {features['latogatoszam_lag1']:.0f} fő ({prev_date.strftime('%Y-%m-%d')})")
+        else:
+            # Ha nincs adat az előző napra, használjuk az átlagot
+            features['latogatoszam_lag1'] = historical_data['latogatoszam'].mean()
+            features['atlaghomerseklet_lag1'] = historical_data['atlaghomerseklet'].mean()
+            print(f"⚠️ Nincs adat az előző napra, átlag használata: {features['latogatoszam_lag1']:.0f} fő")
+
+        # 7 napos átlag számítása
+        week_start = pd.Timestamp(date) - pd.Timedelta(days=7)
+        week_end = pd.Timestamp(date)
+        week_data = historical_data[
+            (historical_data['datum'] >= week_start) &
+            (historical_data['datum'] < week_end)
+        ]
+
+        if not week_data.empty and len(week_data) >= 3:
+            # Valódi 7 napos átlag használata
+            features['latogatoszam_7d_avg'] = week_data['latogatoszam'].mean()
+            features['atlaghomerseklet_7d_avg'] = week_data['atlaghomerseklet'].mean()
+            print(f"📊 Valódi 7 napos átlag: {features['latogatoszam_7d_avg']:.0f} fő ({len(week_data)} nap adata alapján)")
+        else:
+            # Ha nincs elég adat, használjuk az átlagot
+            features['latogatoszam_7d_avg'] = historical_data['latogatoszam'].mean()
+            features['atlaghomerseklet_7d_avg'] = historical_data['atlaghomerseklet'].mean()
+            print(f"⚠️ Nincs elég 7 napos adat, átlag használata: {features['latogatoszam_7d_avg']:.0f} fő")
+    else:
+        # Ha nincs historikus adat, használjuk az általános átlagokat
+        features['latogatoszam_lag1'] = 10974  # általános átlag
+        features['atlaghomerseklet_lag1'] = temperature
+        features['latogatoszam_7d_avg'] = 10974  # általános átlag
+        features['atlaghomerseklet_7d_avg'] = temperature
+        print("⚠️ Nincs historikus adat, általános átlagok használata")
     
     # Hét napjai (one-hot encoding)
     for i in range(1, 8):
@@ -215,7 +270,7 @@ def prediction_page(model, data, scaler, feature_columns):
         prediction_date = st.date_input(
             "Válasszon dátumot:",
             value=datetime.now().date(),
-            min_value=datetime(2024, 1, 1).date(),
+            min_value=data['datum'].min().date(),
             max_value=datetime(2025, 12, 31).date()
         )
         
@@ -244,14 +299,20 @@ def prediction_page(model, data, scaler, feature_columns):
             min_value=0, max_value=1000, value=300, step=10
         )
     
+    # Figyelmeztetés jövőbeli dátumok esetén
+    if prediction_date > data['datum'].max().date():
+        st.warning(f"⚠️ **Figyelmeztetés:** {prediction_date} dátuma kívül esik az elérhető historikus adatok tartományán ({data['datum'].min().date()} - {data['datum'].max().date()}).\n\nA predikció általános átlagokat fog használni a lag értékek helyett.")
+    elif prediction_date < data['datum'].min().date():
+        st.info(f"ℹ️ **Információ:** {prediction_date} dátuma a rendelkezésre álló adatok előtt van. A predikció általános átlagokat fog használni.")
+
     # Előrejelzés gomb
     if st.button("🔮 Látogatószám Előrejelzése", type="primary"):
         
         # Jellemzők létrehozása
         features_df = create_prediction_features(
-            prediction_date, temperature, rainfall, 
+            prediction_date, temperature, rainfall,
             is_holiday, is_school_break, marketing_spend,
-            scaler, feature_columns
+            scaler, feature_columns, data  # ✅ Historikus adatok átadása
         )
         
         # Előrejelzés
@@ -263,23 +324,59 @@ def prediction_page(model, data, scaler, feature_columns):
             st.markdown('<div class="prediction-result">', unsafe_allow_html=True)
             st.markdown(f"### 🎯 Előrejelzett látogatószám: **{prediction:,.0f} fő**")
             
-            # Kontextus információk
-            avg_visitors = data['latogatoszam'].mean()
-            difference = prediction - avg_visitors
-            percentage_diff = (difference / avg_visitors) * 100
+            # Kontextus információk - KONTEXTUÁLIS ÁTLAG használata
+            global_avg = data['latogatoszam'].mean()
+            
+            # Kontextuális átlag kiszámítása
+            if is_holiday:
+                # Ünnepnapi átlag
+                context_avg = data[data['unnepnap'] == 1]['latogatoszam'].mean() if 'unnepnap' in data.columns else global_avg * 1.9
+                context_type = "ünnepnapi"
+            elif prediction_date.weekday() >= 5:
+                # Hétvégi átlag
+                context_avg = data[data['hetvege'] == 1]['latogatoszam'].mean() if 'hetvege' in data.columns else global_avg * 1.4
+                context_type = "hétvégi"
+            else:
+                # Hétköznapi átlag
+                context_avg = data[data['hetvege'] == 0]['latogatoszam'].mean() if 'hetvege' in data.columns else global_avg * 0.82
+                context_type = "hétköznapi"
+            
+            # Eltérések számítása
+            difference_from_global = prediction - global_avg
+            difference_from_context = prediction - context_avg
+            percentage_diff_global = (difference_from_global / global_avg) * 100
+            percentage_diff_context = (difference_from_context / context_avg) * 100
             
             col1, col2, col3 = st.columns(3)
             with col1:
-                st.metric("Előrejelzés", f"{prediction:,.0f}", f"{difference:+.0f}")
+                st.metric("Előrejelzés", f"{prediction:,.0f}", f"{difference_from_context:+.0f}")
             with col2:
-                st.metric("Átlagtól való eltérés", f"{percentage_diff:+.1f}%")
+                st.metric(f"{context_type.capitalize()} átlagtól", 
+                         f"{percentage_diff_context:+.1f}%",
+                         help=f"Átlagos {context_type} látogatószám: {context_avg:,.0f} fő")
             with col3:
-                if prediction > avg_visitors:
-                    st.success("🟢 Átlag feletti látogatottság")
+                if percentage_diff_context > 10:
+                    st.success(f"🟢 {context_type.capitalize()} átlag felett")
+                elif percentage_diff_context < -10:
+                    st.warning(f"🟡 {context_type.capitalize()} átlag alatt")
                 else:
-                    st.info("🔵 Átlag alatti látogatottság")
+                    st.info(f"🔵 Átlagos {context_type} forgalom")
             
             st.markdown('</div>', unsafe_allow_html=True)
+            
+            # Részletes kontextus információ
+            with st.expander("📊 Részletes statisztikák"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.write("**Kontextuális összehasonlítás:**")
+                    st.write(f"• {context_type.capitalize()} átlag: {context_avg:,.0f} fő")
+                    st.write(f"• Eltérés: {percentage_diff_context:+.1f}%")
+                    st.write(f"• Különbség: {difference_from_context:+,.0f} fő")
+                with col2:
+                    st.write("**Globális összehasonlítás:**")
+                    st.write(f"• Teljes átlag: {global_avg:,.0f} fő")
+                    st.write(f"• Eltérés: {percentage_diff_global:+.1f}%")
+                    st.write(f"• Különbség: {difference_from_global:+,.0f} fő")
             
             # Tényezők hatása
             st.markdown("### 📊 Befolyásoló Tényezők")

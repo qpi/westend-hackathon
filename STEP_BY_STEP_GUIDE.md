@@ -3,6 +3,10 @@
 ## 🎯 Áttekintés
 Ez az útmutató részletesen bemutatja, hogyan futtassa és demonstrálja a Westend Hackathon bevásárlóközpont látogatószám előrejelző projektet.
 
+## 🎯 **ÚJ FUNKCIÓ**: Valódi Historikus Adatokból Számított Lag Értékek!
+
+A rendszer most már **valódi historikus adatokból** számítja ki az előző napi és 7 napos átlag értékeket, nem hardcode-olt átlagokat használ!
+
 ---
 
 ## 🛠️ 1. Környezet Előkészítés
@@ -350,65 +354,5 @@ python create_model.py
 ### 8.1 Technikai Előkészületek
 - [ ] Python környezet működik
 - [ ] Összes függőség telepítve
-- [ ] Adatok generálva (`data/hackathon_data.csv`)
-- [ ] Modell betanítva (`models/best_model_random_forest.joblib`)
-- [ ] Streamlit app tesztelve
-- [ ] Internet kapcsolat stabil
-- [ ] Backup adatok készítve
-
-### 8.2 Demo Anyagok
-- [ ] `DEMO_SCRIPT.md` áttanulmányozva
-- [ ] Jupyter notebook tesztelve
-- [ ] Szcenáriók kipróbálva
-- [ ] Időzítés gyakorlva
-- [ ] Backup terv készítve
-
-### 8.3 Üzleti Anyagok
-- [ ] ROI számítások ellenőrizve
-- [ ] Piaci adatok frissítve
-- [ ] Konkurencia elemzés
-- [ ] Következő lépések tisztázva
-
----
-
-## 🚀 9. Következő Lépések
-
-### 9.1 Projekt Továbbfejlesztés
-1. **Valós adatok integrálása**:
-   - Időjárási API (OpenWeatherMap)
-   - POS rendszer adatok
-   - Google Analytics
-
-2. **Modell finomhangolás**:
-   - Hiperparaméter optimalizálás
-   - Ensemble módszerek
-   - Deep learning modellek
-
-3. **Felhasználói felület javítás**:
-   - Mobil alkalmazás
-   - Dashboard továbbfejlesztés
-   - Riportok automatizálása
-
-### 9.2 Üzleti Skálázás
-1. **Pilot implementáció**
-2. **Ügyfél onboarding**
-3. **Feedback gyűjtés**
-4. **Termék iteráció**
-
----
-
-## 📞 Támogatás
-
-### Gyakori Kérdések:
-- **Hol találom az eredményeket?** → `outputs/` könyvtár
-- **Hogyan módosítom a modellt?** → `src/machine_learning_models.py`
-- **Új adatokat hogyan adhatok hozzá?** → `src/data_preparation.py`
-
-### Kapcsolat:
-- **Email**: team@westend-hackathon.com
-- **GitHub**: [westend-hackathon/visitor-prediction]
-- **Demo**: [westend-demo.streamlit.app]
-
----
-
-**Sikeres hackathont és bemutató! 🏆**
+- [ ] Adatok generálva (`data/hackathon_data_full.csv`)
+- [ ] Modell betanítva (`

@@ -38,7 +38,9 @@ def main():
         print("-" * 40)
         
         data_prep = DataPreparation()
-        X_train, X_test, y_train, y_test, feature_names, summary = data_prep.full_pipeline()
+        # Use extended dataset if available
+        data_path = 'data/hackathon_data_full.csv' if os.path.exists('data/hackathon_data_full.csv') else 'data/hackathon_data.csv'
+        X_train, X_test, y_train, y_test, feature_names, summary = data_prep.full_pipeline(file_path=data_path)
         
         print(f"✅ Adat előkészítés befejezve")
         print(f"   - Train minták: {len(X_train):,}")

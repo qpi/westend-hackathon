@@ -21,7 +21,7 @@ Az API a `http://localhost:5000` címen lesz elérhető.
 
 ### 1. **POST /api/predict** - Látogatószám előrejelzés és magyarázat
 
-Ez az endpoint előrejelzi a látogatószámot és **részletesen elmagyarázza, hogy miért annyi**.
+Ez az endpoint előrejelzi a látogatószámot és **részletesen elmagyarázza, hogy miért annyi**. **Új funkció**: A modell most már valódi historikus adatokból számítja ki az előző napi és 7 napos átlagokat!
 
 #### Request
 
@@ -140,6 +140,7 @@ Teljes szöveges magyarázat, ami elmondja:
 - Ez átlag feletti vagy alatti-e
 - Milyen mértékű az eltérés
 - Melyek a fő befolyásoló tényezők
+- **Új**: Most már valódi historikus trendek alapján számítja az előző napi és heti átlagokat!
 
 ---
 
