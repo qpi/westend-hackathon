@@ -189,45 +189,52 @@ def create_prediction_features(date, temperature, rainfall, is_holiday,
             features['atlaghomerseklet_7d_avg'] = historical_data['atlaghomerseklet'].mean()
             print(f"⚠️ Nincs elég 7 napos adat, átlag használata: {features['latogatoszam_7d_avg']:.0f} fő")
     else:
-        # Lag jellemzők - a modell ezeket várja, ezért hozzáadjuk őket
-        # Intelligens becslés a bemeneti paraméterek alapján
+        # Lag jellemzők - ERŐSÍTETT változás a bemeneti paraméterek alapján
         base_visitors = 10974  # Átlagos látogatószám az adatokból
         
         # Becsült látogatószám a jelenlegi paraméterek alapján
         estimated_visitors = base_visitors
         
-        # Hőmérséklet hatása
+        # Hőmérséklet hatása - ERŐSÍTVE
         if temperature < 0:
-            estimated_visitors *= 0.7  # Hideg idő
+            estimated_visitors *= 0.3  # ERŐSÍTVE: 0.7 -> 0.3 (nagyon hideg)
+        elif temperature < 5:
+            estimated_visitors *= 0.5  # Hideg
+        elif temperature > 35:
+            estimated_visitors *= 0.4  # ERŐSÍTVE: 0.8 -> 0.4 (nagyon meleg)
         elif temperature > 30:
-            estimated_visitors *= 0.8  # Túl meleg
+            estimated_visitors *= 0.6  # Meleg
         elif 15 <= temperature <= 25:
-            estimated_visitors *= 1.1  # Kellemes idő
+            estimated_visitors *= 1.3  # ERŐSÍTVE: 1.1 -> 1.3 (tökéletes idő)
         
-        # Eső hatása
-        if rainfall > 5:
-            estimated_visitors *= 0.6  # Esős idő
+        # Eső hatása - ERŐSÍTVE
+        if rainfall > 20:
+            estimated_visitors *= 0.2  # ERŐSÍTVE: 0.6 -> 0.2 (erős eső)
+        elif rainfall > 5:
+            estimated_visitors *= 0.4  # ERŐSÍTVE: 0.6 -> 0.4 (eső)
         
-        # Speciális napok hatása
+        # Speciális napok hatása - ERŐSÍTVE
         if is_holiday:
-            estimated_visitors *= 1.6  # Ünnepnap
+            estimated_visitors *= 2.5  # ERŐSÍTVE: 1.6 -> 2.5 (ünnepnap)
         if is_school_break:
-            estimated_visitors *= 1.2  # Iskolai szünet
+            estimated_visitors *= 1.8  # ERŐSÍTVE: 1.2 -> 1.8 (iskolai szünet)
         if date.weekday() >= 5:  # Hétvége
-            estimated_visitors *= 1.4
+            estimated_visitors *= 2.0  # ERŐSÍTVE: 1.4 -> 2.0 (hétvége)
         
-        # Marketing hatása
-        if marketing_spend > 500:
-            estimated_visitors *= 1.2  # Magas marketing
-        elif marketing_spend < 200:
-            estimated_visitors *= 0.9  # Alacsony marketing
+        # Marketing hatása - ERŐSÍTVE
+        if marketing_spend > 800:
+            estimated_visitors *= 2.0  # ERŐSÍTVE: 1.2 -> 2.0 (magas marketing)
+        elif marketing_spend > 500:
+            estimated_visitors *= 1.5  # Közepes marketing
+        elif marketing_spend < 100:
+            estimated_visitors *= 0.5  # ERŐSÍTVE: 0.9 -> 0.5 (alacsony marketing)
         
-        # Lag jellemzők becslése
-        features['latogatoszam_lag1'] = estimated_visitors * 0.95  # Előző nap (kissé kevesebb)
+        # Lag jellemzők becslése - NAGY változás
+        features['latogatoszam_lag1'] = estimated_visitors * 0.8  # ERŐSÍTVE: 0.95 -> 0.8
         features['atlaghomerseklet_lag1'] = temperature
-        features['latogatoszam_7d_avg'] = estimated_visitors * 1.05  # 7 napos átlag (kissé több)
+        features['latogatoszam_7d_avg'] = estimated_visitors * 1.2  # ERŐSÍTVE: 1.05 -> 1.2
         features['atlaghomerseklet_7d_avg'] = temperature
-        print("⚠️ Lag jellemzők intelligens becsléssel")
+        print("⚠️ Lag jellemzők ERŐSÍTETT becsléssel")
     
     # Hét napjai (one-hot encoding)
     for i in range(1, 8):
