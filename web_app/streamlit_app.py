@@ -276,7 +276,7 @@ def create_prediction_features(date, temperature, rainfall, is_holiday,
 def main():
     # Főcím
     st.markdown('<h1 class="main-header">🏬 Westend Látogatószám Előrejelző v2.0</h1>', unsafe_allow_html=True)
-    st.caption("📱 Telegram integráció aktív | Utolsó frissítés: 2025-09-12 11:30")
+    st.caption("📱 Telegram integráció aktív | Railway deployment: 2025-09-12 11:45")
     
     # Adatok és modell betöltése
     data = load_data()

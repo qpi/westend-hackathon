@@ -1,0 +1,12 @@
+Railway Deployment Trigger
+==========================
+
+Timestamp: 2025-09-12 11:45:00
+Commit: Force Railway deployment with Telegram integration v2.0
+Features: 
+- Telegram bot integration active
+- Dual percentage displays (contextual + global)
+- Error handling improvements
+- HTTP-based Telegram API
+
+This file is created to trigger a new Railway deployment.
