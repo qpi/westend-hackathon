@@ -10,6 +10,7 @@ import logging
 from datetime import datetime
 import streamlit as st
 import json
+import os
 
 # Telegram Bot Configuration
 BOT_TOKEN = "8228985225:AAEiVjOqciFSnByLEy9gdofMvcylaqdszbc"
@@ -254,7 +255,60 @@ class TelegramNotifier:
         """Remove a chat ID from the notification list"""
         self.chat_ids.discard(chat_id)
         logger.info(f"Removed chat ID: {chat_id}")
-    
+
+    def check_for_new_subscribers(self):
+        """Check for new messages and register new subscribers"""
+        try:
+            url = f"{self.base_url}/getUpdates"
+            response = requests.get(url, timeout=10)
+
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('ok'):
+                    updates = data.get('result', [])
+                    new_subscribers = 0
+
+                    for update in updates:
+                        message = update.get('message', {})
+                        chat = message.get('chat', {})
+                        chat_id = str(chat.get('id', ''))
+                        text = message.get('text', '')
+
+                        # Check if it's a /start command or any message from new user
+                        if chat_id and (text.startswith('/start') or chat_id not in self.chat_ids):
+                            if self.add_subscriber(chat_id):
+                                new_subscribers += 1
+                                logger.info(f"New subscriber registered: {chat_id}")
+
+                                # Send welcome message
+                                welcome_msg = (
+                                    "🏬 Üdvözöljük a WestEnd Látogatószám Előrejelző Bot-ban!\n\n"
+                                    "✅ Sikeresen feliratkozott az értesítésekre!\n"
+                                    "📊 Mostantól minden előrejelzést megkap automatikusan.\n\n"
+                                    "🔮 Az előrejelzések a következő információkat tartalmazzák:\n"
+                                    "• 📅 Dátum és nap típusa\n"
+                                    "• 🌤️ Időjárási adatok\n"
+                                    "• 💰 Marketing kiadás\n"
+                                    "• 📈 Előrejelzett látogatószám\n"
+                                    "• 📊 Összehasonlítás átlagokkal\n\n"
+                                    "🎯 Jó előrejelzéseket!"
+                                )
+                                self._send_message(chat_id, welcome_msg)
+
+                    if new_subscribers > 0:
+                        logger.info(f"Registered {new_subscribers} new subscribers")
+
+                    return new_subscribers
+                else:
+                    logger.error(f"getUpdates API returned ok=false: {data}")
+                    return 0
+            else:
+                logger.error(f"getUpdates failed: HTTP {response.status_code}")
+                return 0
+        except Exception as e:
+            logger.error(f"Error checking for new subscribers: {e}")
+            return 0
+
     def test_connection(self) -> bool:
         """Test if the bot token is valid using HTTP request"""
         try:
@@ -267,6 +321,12 @@ class TelegramNotifier:
                     bot_info = data.get('result', {})
                     username = bot_info.get('username', 'Unknown')
                     logger.info(f"Bot connected successfully: {username}")
+
+                    # Check for new subscribers when testing connection
+                    new_count = self.check_for_new_subscribers()
+                    if new_count > 0:
+                        logger.info(f"Found {new_count} new subscribers during connection test")
+
                     return True
                 else:
                     logger.error(f"Bot API error: {data}")
@@ -321,14 +381,26 @@ def add_telegram_settings_to_sidebar():
     subscriber_count = len(telegram_notifier.chat_ids)
     st.sidebar.info(f"👥 Feliratkozók száma: **{subscriber_count}**")
     
-    # Test connection button
-    if st.sidebar.button("🔗 Bot Kapcsolat Tesztelése"):
-        with st.sidebar:
-            with st.spinner("Telegram bot tesztelése..."):
+    # Test connection and check for new subscribers
+    col1, col2 = st.sidebar.columns(2)
+
+    with col1:
+        if st.button("🔗 Bot Teszt"):
+            with st.spinner("Bot tesztelése..."):
                 if test_telegram_connection():
-                    st.success("✅ Bot kapcsolat OK!")
+                    st.success("✅ OK!")
                 else:
-                    st.error("❌ Bot kapcsolat sikertelen!")
+                    st.error("❌ Hiba!")
+
+    with col2:
+        if st.button("🔄 Feliratkozók"):
+            with st.spinner("Új feliratkozók keresése..."):
+                new_count = telegram_notifier.check_for_new_subscribers()
+                if new_count > 0:
+                    st.success(f"✅ {new_count} új!")
+                    st.rerun()  # Refresh to show updated count
+                else:
+                    st.info("ℹ️ Nincs új")
     
     # Chat ID input
     chat_id = st.sidebar.text_input(
