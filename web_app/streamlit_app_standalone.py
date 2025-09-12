@@ -130,10 +130,40 @@ def create_prediction_features(date, temperature, rainfall, is_holiday, is_schoo
     features['hetvege_es_jo_ido'] = features['hetvege'] * (1 - features['hideg']) * (1 - features['esik'])
     features['unnep_es_marketing'] = features['unnepnap'] * features['magas_marketing']
     
-    # Lag jellemzők (átlagos értékekkel helyettesítjük)
-    features['latogatoszam_lag1'] = 10974  # átlagos látogatószám
+    # Lag jellemzők (dinamikus számítás)
+    # Valós implementációban ezeket a korábbi napok adataiból kellene számítani
+    # Most a bemeneti paraméterek alapján becsüljük
+    base_visitors = 10000  # Alapértelmezett látogatószám
+    
+    # Hőmérséklet hatása
+    temp_factor = 1 + (temperature - 15) * 0.02  # 15°C alapértelmezett
+    
+    # Időjárás hatása
+    weather_factor = 1.0
+    if temperature < 0:
+        weather_factor *= 0.7  # Hideg idő
+    elif temperature > 30:
+        weather_factor *= 0.8  # Túl meleg
+    if rainfall > 5:
+        weather_factor *= 0.6  # Esős idő
+    
+    # Speciális napok hatása
+    special_factor = 1.0
+    if is_holiday:
+        special_factor *= 1.6  # Ünnepnap
+    if is_school_break:
+        special_factor *= 1.2  # Iskolai szünet
+    if date.weekday() >= 5:  # Hétvége
+        special_factor *= 1.4
+    
+    # Marketing hatása
+    marketing_factor = 1 + (marketing_spend - 300) * 0.0005  # 300 EUR alapértelmezett
+    
+    # Lag jellemzők becslése
+    estimated_visitors = base_visitors * temp_factor * weather_factor * special_factor * marketing_factor
+    features['latogatoszam_lag1'] = estimated_visitors * 0.95  # Előző nap (kissé kevesebb)
     features['atlaghomerseklet_lag1'] = temperature
-    features['latogatoszam_7d_avg'] = 10974
+    features['latogatoszam_7d_avg'] = estimated_visitors * 1.05  # 7 napos átlag (kissé több)
     features['atlaghomerseklet_7d_avg'] = temperature
     
     # Hét napjai (one-hot encoding)
