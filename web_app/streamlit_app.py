@@ -18,6 +18,10 @@ from datetime import datetime
 import warnings
 warnings.filterwarnings('ignore')
 
+# Telegram integration
+sys.path.append('.')
+from telegram_integration import send_prediction_to_telegram, add_telegram_settings_to_sidebar
+
 # Projekt útvonal hozzáadása
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
@@ -287,9 +291,12 @@ def main():
         "Válasszon oldalt:",
         ["🎯 Előrejelzés", "📈 Adatok Áttekintése", "🤖 Modell Teljesítmény", "📊 Vizualizációk"]
     )
+
+    # Telegram beállítások hozzáadása
+    chat_id, enable_telegram = add_telegram_settings_to_sidebar()
     
     if page == "🎯 Előrejelzés":
-        prediction_page(model, data, scaler, feature_columns)
+        prediction_page(model, data, scaler, feature_columns, chat_id, enable_telegram)
     elif page == "📈 Adatok Áttekintése":
         data_overview_page(data)
     elif page == "🤖 Modell Teljesítmény":
@@ -297,7 +304,7 @@ def main():
     elif page == "📊 Vizualizációk":
         visualizations_page(data)
 
-def prediction_page(model, data, scaler, feature_columns):
+def prediction_page(model, data, scaler, feature_columns, chat_id=None, enable_telegram=False):
     """Előrejelzés oldal"""
     st.header("🎯 Látogatószám Előrejelzés")
     
@@ -515,7 +522,50 @@ def prediction_page(model, data, scaler, feature_columns):
                     st.write("• 📅 Hétköznap")
                 if marketing_spend < 200:
                     st.write("• 📢 Alacsony marketing kiadás")
-            
+
+            # Telegram értesítés küldése
+            if enable_telegram:
+                try:
+                    # Előrejelzési adatok összegyűjtése
+                    prediction_data = {
+                        'prediction': prediction,
+                        'date': prediction_date,
+                        'temperature': temperature,
+                        'rainfall': rainfall,
+                        'marketing_spend': marketing_spend,
+                        'is_holiday': is_holiday,
+                        'is_school_break': is_school_break,
+                        'global_avg': global_avg,
+                        'context_avg': context_avg,
+                        'context_type': context_type,
+                        'percentage_diff_global': percentage_diff_global,
+                        'percentage_diff_context': percentage_diff_context
+                    }
+
+                    # Telegram üzenet küldése
+                    with st.spinner("📱 Telegram értesítés küldése..."):
+                        success, error_msg = send_prediction_to_telegram(prediction_data, chat_id if chat_id else None)
+
+                    if success:
+                        st.success(f"✅ Telegram értesítés sikeresen elküldve! (Chat ID: {chat_id})")
+                    else:
+                        st.error("❌ Telegram értesítés küldése sikertelen!")
+                        st.error(f"🔍 Hiba részletei: {error_msg}")
+
+                        with st.expander("💡 Hibaelhárítási tippek"):
+                            st.write("**Ellenőrizze a következőket:**")
+                            st.write("• Chat ID helyes-e (számokból áll)")
+                            st.write("• Internetkapcsolat működik-e")
+                            st.write("• Bot-tal beszélgetett-e már (/start parancs)")
+                            st.write("• Telegram elérhető-e")
+                            st.write("")
+                            st.write("**Tesztelés:**")
+                            st.code("python test_telegram_bot.py")
+                            st.write("Futtassa ezt a parancsot a terminálban a közvetlen teszteléshez.")
+
+                except Exception as telegram_error:
+                    st.error(f"❌ Telegram hiba: {str(telegram_error)}")
+
         except Exception as e:
             st.error(f"Előrejelzési hiba: {str(e)}")
 
