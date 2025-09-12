@@ -414,12 +414,18 @@ def add_telegram_settings_to_sidebar():
                 else:
                     st.info("ℹ️ Nincs új")
     
-    # Chat ID input
+    # Chat ID input (optional - for specific user only)
     chat_id = st.sidebar.text_input(
-        "💬 Chat ID",
-        value="8121891526",  # Alapértelmezett Chat ID
-        help="Adja meg a Telegram chat ID-t az értesítések fogadásához. Alapértelmezett: 8121891526 (Mihály Kuprivecz)"
+        "💬 Chat ID (opcionális)",
+        value="",  # Üres = broadcast minden feliratkozónak
+        help="Hagyja üresen a broadcast küldéshez MINDEN feliratkozónak. Vagy adjon meg konkrét Chat ID-t egyéni küldéshez."
     )
+
+    # Show current mode
+    if chat_id.strip():
+        st.sidebar.info(f"🎯 Egyéni küldés: {chat_id}")
+    else:
+        st.sidebar.success(f"📡 Broadcast mód: {len(telegram_notifier.chat_ids)} feliratkozó")
     
     # Enable/disable notifications
     enable_notifications = st.sidebar.checkbox(
