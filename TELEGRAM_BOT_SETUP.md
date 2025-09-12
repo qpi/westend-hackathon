@@ -6,6 +6,18 @@
 - **Username**: @westend_forecast_bot
 - **Bot ID**: westend_forecast_bot
 
+## 🚀 Új Funkció: Broadcast Üzenetek
+A bot most **minden feliratkozónak** küldi az előrejelzéseket, nem csak egy konkrét Chat ID-ra!
+
+### 👥 Feliratkozás
+1. Keresse meg a `@westend_forecast_bot` bot-ot Telegramban
+2. Küldje el a `/start` parancsot
+3. Automatikusan feliratkozik az értesítésekre
+
+### 📢 Broadcast Működés
+- Ha **nincs Chat ID megadva** → Minden feliratkozó megkapja
+- Ha **van Chat ID megadva** → Csak az adott személy kapja meg
+
 ## 🚀 Használat
 
 ### 1. Bot Elindítása Telegramban

@@ -544,14 +544,26 @@ def prediction_page(model, data, scaler, feature_columns, chat_id=None, enable_t
                     }
 
                     # Telegram üzenet küldése
-                    with st.spinner("📱 Telegram értesítés küldése..."):
-                        success, error_msg = send_prediction_to_telegram(prediction_data, chat_id if chat_id else None)
+                    if chat_id:
+                        with st.spinner(f"📱 Telegram értesítés küldése ({chat_id})..."):
+                            success, error_msg = send_prediction_to_telegram(prediction_data, chat_id)
 
-                    if success:
-                        st.success(f"✅ Telegram értesítés sikeresen elküldve! (Chat ID: {chat_id})")
+                        if success:
+                            st.success(f"✅ Telegram értesítés sikeresen elküldve! (Chat ID: {chat_id})")
+                        else:
+                            st.error("❌ Telegram értesítés küldése sikertelen!")
+                            st.error(f"🔍 Hiba részletei: {error_msg}")
                     else:
-                        st.error("❌ Telegram értesítés küldése sikertelen!")
-                        st.error(f"🔍 Hiba részletei: {error_msg}")
+                        # Broadcast to all subscribers
+                        with st.spinner("📱 Broadcast küldése minden feliratkozónak..."):
+                            success, error_msg = send_prediction_to_telegram(prediction_data, None)
+
+                        if success:
+                            st.success("✅ Broadcast sikeresen elküldve minden feliratkozónak!")
+                            st.info(f"📊 {error_msg}")  # Show broadcast statistics
+                        else:
+                            st.error("❌ Broadcast küldése sikertelen!")
+                            st.error(f"🔍 Hiba részletei: {error_msg}")
 
                         with st.expander("💡 Hibaelhárítási tippek"):
                             st.write("**Ellenőrizze a következőket:**")

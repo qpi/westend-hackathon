@@ -27,6 +27,56 @@ class TelegramNotifier:
         self.token = token
         self.base_url = f"https://api.telegram.org/bot{token}"
         self.chat_ids = set()  # Store chat IDs of users who interacted with the bot
+        self.subscribers_file = "telegram_subscribers.txt"  # File to store subscribers
+        self.load_subscribers()  # Load existing subscribers
+
+    def load_subscribers(self):
+        """Load subscribers from file"""
+        try:
+            if os.path.exists(self.subscribers_file):
+                with open(self.subscribers_file, 'r') as f:
+                    for line in f:
+                        chat_id = line.strip()
+                        if chat_id:
+                            self.chat_ids.add(chat_id)
+                logger.info(f"Loaded {len(self.chat_ids)} subscribers from file")
+            else:
+                # Add default subscriber (Mihály)
+                self.chat_ids.add("8121891526")
+                self.save_subscribers()
+                logger.info("Created new subscribers file with default subscriber")
+        except Exception as e:
+            logger.error(f"Error loading subscribers: {e}")
+            # Add default subscriber as fallback
+            self.chat_ids.add("8121891526")
+
+    def save_subscribers(self):
+        """Save subscribers to file"""
+        try:
+            with open(self.subscribers_file, 'w') as f:
+                for chat_id in self.chat_ids:
+                    f.write(f"{chat_id}\n")
+            logger.info(f"Saved {len(self.chat_ids)} subscribers to file")
+        except Exception as e:
+            logger.error(f"Error saving subscribers: {e}")
+
+    def add_subscriber(self, chat_id: str):
+        """Add a new subscriber"""
+        if chat_id not in self.chat_ids:
+            self.chat_ids.add(chat_id)
+            self.save_subscribers()
+            logger.info(f"Added new subscriber: {chat_id}")
+            return True
+        return False
+
+    def remove_subscriber(self, chat_id: str):
+        """Remove a subscriber"""
+        if chat_id in self.chat_ids:
+            self.chat_ids.remove(chat_id)
+            self.save_subscribers()
+            logger.info(f"Removed subscriber: {chat_id}")
+            return True
+        return False
 
     def send_prediction_summary(self, prediction_data: dict, chat_id: str = None):
         """
@@ -34,7 +84,7 @@ class TelegramNotifier:
 
         Args:
             prediction_data: Dictionary containing prediction results
-            chat_id: Specific chat ID to send to (optional)
+            chat_id: Specific chat ID to send to (optional, if None sends to all subscribers)
 
         Returns:
             tuple: (success: bool, error_message: str)
@@ -43,24 +93,47 @@ class TelegramNotifier:
             message = self._format_prediction_message(prediction_data)
 
             if chat_id:
-                # Send to specific chat
+                # Send to specific chat only
                 success, error_msg = self._send_message(chat_id, message)
                 if success:
-                    logger.info(f"Prediction sent to chat {chat_id}")
+                    logger.info(f"Prediction sent to specific chat {chat_id}")
                     return True, "Success"
                 else:
-                    logger.error(f"Failed to send to chat {chat_id}: {error_msg}")
+                    logger.error(f"Failed to send to specific chat {chat_id}: {error_msg}")
                     return False, error_msg
             else:
-                # Ha nincs chat_id megadva, használjuk az alapértelmezett chat ID-t
-                default_chat_id = "8121891526"  # Mihály Kuprivecz chat ID
-                logger.info(f"No chat_id provided, using default: {default_chat_id}")
-                success, error_msg = self._send_message(default_chat_id, message)
-                if success:
-                    logger.info(f"Prediction sent to default chat {default_chat_id}")
-                    return True, "Success"
+                # Send to ALL subscribers (broadcast)
+                if not self.chat_ids:
+                    logger.warning("No subscribers found, adding default subscriber")
+                    self.chat_ids.add("8121891526")
+                    self.save_subscribers()
+
+                successful_sends = 0
+                failed_sends = 0
+                error_messages = []
+
+                logger.info(f"Broadcasting to {len(self.chat_ids)} subscribers")
+
+                for subscriber_chat_id in self.chat_ids:
+                    success, error_msg = self._send_message(subscriber_chat_id, message)
+                    if success:
+                        successful_sends += 1
+                        logger.info(f"✅ Sent to subscriber: {subscriber_chat_id}")
+                    else:
+                        failed_sends += 1
+                        error_messages.append(f"❌ Failed to send to {subscriber_chat_id}: {error_msg}")
+                        logger.error(f"Failed to send to subscriber {subscriber_chat_id}: {error_msg}")
+
+                # Return overall result
+                if successful_sends > 0:
+                    result_msg = f"Broadcast completed: {successful_sends} successful, {failed_sends} failed"
+                    logger.info(result_msg)
+                    if failed_sends > 0:
+                        result_msg += f". Errors: {'; '.join(error_messages[:3])}"  # Show first 3 errors
+                    return True, result_msg
                 else:
-                    logger.error(f"Failed to send to default chat {default_chat_id}: {error_msg}")
+                    error_msg = f"All broadcasts failed. Errors: {'; '.join(error_messages)}"
+                    logger.error(error_msg)
                     return False, error_msg
 
         except Exception as e:
@@ -243,6 +316,10 @@ def add_telegram_settings_to_sidebar():
     """Add Telegram settings to Streamlit sidebar"""
     st.sidebar.markdown("---")
     st.sidebar.markdown("### 📱 Telegram Értesítések")
+
+    # Show subscriber count
+    subscriber_count = len(telegram_notifier.chat_ids)
+    st.sidebar.info(f"👥 Feliratkozók száma: **{subscriber_count}**")
     
     # Test connection button
     if st.sidebar.button("🔗 Bot Kapcsolat Tesztelése"):
