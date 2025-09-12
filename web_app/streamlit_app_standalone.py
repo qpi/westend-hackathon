@@ -130,10 +130,44 @@ def create_prediction_features(date, temperature, rainfall, is_holiday, is_schoo
     features['hetvege_es_jo_ido'] = features['hetvege'] * (1 - features['hideg']) * (1 - features['esik'])
     features['unnep_es_marketing'] = features['unnepnap'] * features['magas_marketing']
     
-    # Lag jellemzők eltávolítva - a modell ezek nélkül is működnie kell
-    # A modell valószínűleg ezeket a jellemzőket használja, de predikció során
-    # nem tudjuk őket pontosan megbecsülni, ezért kihagyjuk őket
-    # Ez csökkentheti a pontosságot, de legalább működik
+    # Lag jellemzők - a modell ezeket várja, ezért hozzáadjuk őket
+    # Intelligens becslés a bemeneti paraméterek alapján
+    base_visitors = 10974  # Átlagos látogatószám az adatokból
+    
+    # Becsült látogatószám a jelenlegi paraméterek alapján
+    estimated_visitors = base_visitors
+    
+    # Hőmérséklet hatása
+    if temperature < 0:
+        estimated_visitors *= 0.7  # Hideg idő
+    elif temperature > 30:
+        estimated_visitors *= 0.8  # Túl meleg
+    elif 15 <= temperature <= 25:
+        estimated_visitors *= 1.1  # Kellemes idő
+    
+    # Eső hatása
+    if rainfall > 5:
+        estimated_visitors *= 0.6  # Esős idő
+    
+    # Speciális napok hatása
+    if is_holiday:
+        estimated_visitors *= 1.6  # Ünnepnap
+    if is_school_break:
+        estimated_visitors *= 1.2  # Iskolai szünet
+    if date.weekday() >= 5:  # Hétvége
+        estimated_visitors *= 1.4
+    
+    # Marketing hatása
+    if marketing_spend > 500:
+        estimated_visitors *= 1.2  # Magas marketing
+    elif marketing_spend < 200:
+        estimated_visitors *= 0.9  # Alacsony marketing
+    
+    # Lag jellemzők becslése
+    features['latogatoszam_lag1'] = estimated_visitors * 0.95  # Előző nap (kissé kevesebb)
+    features['atlaghomerseklet_lag1'] = temperature
+    features['latogatoszam_7d_avg'] = estimated_visitors * 1.05  # 7 napos átlag (kissé több)
+    features['atlaghomerseklet_7d_avg'] = temperature
     
     # Hét napjai (one-hot encoding)
     for i in range(1, 8):
