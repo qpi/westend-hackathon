@@ -32,24 +32,36 @@ class TelegramNotifier:
         self.load_subscribers()  # Load existing subscribers
 
     def load_subscribers(self):
-        """Load subscribers from file"""
+        """Load subscribers from environment variable or file"""
         try:
+            # First try to load from environment variable (for Railway)
+            env_subscribers = os.getenv('TELEGRAM_SUBSCRIBERS')
+            if env_subscribers:
+                chat_ids = [chat_id.strip() for chat_id in env_subscribers.split(',') if chat_id.strip()]
+                self.chat_ids.update(chat_ids)
+                logger.info(f"Loaded {len(chat_ids)} subscribers from environment variable")
+
+            # Then try to load from file (for local development)
             if os.path.exists(self.subscribers_file):
                 with open(self.subscribers_file, 'r') as f:
                     for line in f:
                         chat_id = line.strip()
                         if chat_id:
                             self.chat_ids.add(chat_id)
-                logger.info(f"Loaded {len(self.chat_ids)} subscribers from file")
-            else:
-                # Add default subscriber (Mihály)
-                self.chat_ids.add("8121891526")
+                logger.info(f"Loaded additional subscribers from file, total: {len(self.chat_ids)}")
+
+            # If no subscribers found, add defaults
+            if not self.chat_ids:
+                # Add both default subscribers
+                default_subscribers = ["8121891526", "7911211065"]  # Mihály and Peter
+                self.chat_ids.update(default_subscribers)
                 self.save_subscribers()
-                logger.info("Created new subscribers file with default subscriber")
+                logger.info(f"Created default subscribers: {default_subscribers}")
+
         except Exception as e:
             logger.error(f"Error loading subscribers: {e}")
-            # Add default subscriber as fallback
-            self.chat_ids.add("8121891526")
+            # Add default subscribers as fallback
+            self.chat_ids.update(["8121891526", "7911211065"])
 
     def save_subscribers(self):
         """Save subscribers to file"""
