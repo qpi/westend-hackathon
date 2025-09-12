@@ -325,9 +325,10 @@ def prediction_page(model, data, scaler, feature_columns, chat_id=None, enable_t
         # Időjárás paraméterek
         temperature = st.slider(
             "Átlaghőmérséklet (°C):",
-            min_value=-10, max_value=40, value=15, step=1
+            min_value=-10, max_value=40, value=20, step=1,
+            help="Átlagos budapesti hőmérséklet: 20°C"
         )
-        
+
         rainfall = st.slider(
             "Csapadék (mm):",
             min_value=0.0, max_value=100.0, value=0.0, step=0.5,
@@ -344,7 +345,8 @@ def prediction_page(model, data, scaler, feature_columns, chat_id=None, enable_t
         # Marketing költés
         marketing_spend = st.slider(
             "Marketing kiadás (EUR):",
-            min_value=0, max_value=1000, value=300, step=10
+            min_value=0, max_value=1000, value=450, step=10,
+            help="Átlagos napi marketing kiadás: 450 EUR"
         )
     
     # Figyelmeztetés jövőbeli dátumok esetén
