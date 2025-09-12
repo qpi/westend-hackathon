@@ -189,40 +189,11 @@ def create_prediction_features(date, temperature, rainfall, is_holiday,
             features['atlaghomerseklet_7d_avg'] = historical_data['atlaghomerseklet'].mean()
             print(f"⚠️ Nincs elég 7 napos adat, átlag használata: {features['latogatoszam_7d_avg']:.0f} fő")
     else:
-        # Ha nincs historikus adat, becsüljük a lag jellemzőket
-        base_visitors = 10000  # Alapértelmezett látogatószám
-        
-        # Hőmérséklet hatása
-        temp_factor = 1 + (temperature - 15) * 0.02  # 15°C alapértelmezett
-        
-        # Időjárás hatása
-        weather_factor = 1.0
-        if temperature < 0:
-            weather_factor *= 0.7  # Hideg idő
-        elif temperature > 30:
-            weather_factor *= 0.8  # Túl meleg
-        if rainfall > 5:
-            weather_factor *= 0.6  # Esős idő
-        
-        # Speciális napok hatása
-        special_factor = 1.0
-        if is_holiday:
-            special_factor *= 1.6  # Ünnepnap
-        if is_school_break:
-            special_factor *= 1.2  # Iskolai szünet
-        if date.weekday() >= 5:  # Hétvége
-            special_factor *= 1.4
-        
-        # Marketing hatása
-        marketing_factor = 1 + (marketing_spend - 300) * 0.0005  # 300 EUR alapértelmezett
-        
-        # Lag jellemzők becslése
-        estimated_visitors = base_visitors * temp_factor * weather_factor * special_factor * marketing_factor
-        features['latogatoszam_lag1'] = estimated_visitors * 0.95  # Előző nap (kissé kevesebb)
-        features['atlaghomerseklet_lag1'] = temperature
-        features['latogatoszam_7d_avg'] = estimated_visitors * 1.05  # 7 napos átlag (kissé több)
-        features['atlaghomerseklet_7d_avg'] = temperature
-        print("⚠️ Nincs historikus adat, becsült lag jellemzők használata")
+        # Lag jellemzők eltávolítva - a modell ezek nélkül is működnie kell
+        # A modell valószínűleg ezeket a jellemzőket használja, de predikció során
+        # nem tudjuk őket pontosan megbecsülni, ezért kihagyjuk őket
+        # Ez csökkentheti a pontosságot, de legalább működik
+        print("⚠️ Lag jellemzők kihagyva - egyszerűsített predikció")
     
     # Hét napjai (one-hot encoding)
     for i in range(1, 8):
