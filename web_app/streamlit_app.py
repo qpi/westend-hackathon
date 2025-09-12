@@ -387,14 +387,40 @@ def prediction_page(model, data, scaler, feature_columns):
             percentage_diff_global = (difference_from_global / global_avg) * 100
             percentage_diff_context = (difference_from_context / context_avg) * 100
             
-            col1, col2, col3 = st.columns(3)
+            # Fő metrikák megjelenítése - 4 oszlopban
+            col1, col2, col3, col4 = st.columns(4)
+
             with col1:
-                st.metric("Előrejelzés", f"{prediction:,.0f}", f"{difference_from_context:+.0f}")
+                st.metric("🎯 Előrejelzés", f"{prediction:,.0f} fő", f"{difference_from_context:+.0f}")
+
             with col2:
-                st.metric(f"{context_type.capitalize()} átlagtól", 
+                # Kontextuális eltérés
+                context_color = "normal"
+                if percentage_diff_context > 10:
+                    context_color = "normal"  # Zöld nyíl
+                elif percentage_diff_context < -10:
+                    context_color = "inverse"  # Piros nyíl
+
+                st.metric(f"📊 {context_type.capitalize()} átlagtól",
                          f"{percentage_diff_context:+.1f}%",
+                         delta_color=context_color,
                          help=f"Átlagos {context_type} látogatószám: {context_avg:,.0f} fő")
+
             with col3:
+                # Globális eltérés
+                global_color = "normal"
+                if percentage_diff_global > 10:
+                    global_color = "normal"  # Zöld nyíl
+                elif percentage_diff_global < -10:
+                    global_color = "inverse"  # Piros nyíl
+
+                st.metric("🌍 Globális átlagtól",
+                         f"{percentage_diff_global:+.1f}%",
+                         delta_color=global_color,
+                         help=f"Teljes átlagos látogatószám: {global_avg:,.0f} fő")
+
+            with col4:
+                # Státusz indikátor
                 if percentage_diff_context > 10:
                     st.success(f"🟢 {context_type.capitalize()} átlag felett")
                 elif percentage_diff_context < -10:
@@ -403,7 +429,43 @@ def prediction_page(model, data, scaler, feature_columns):
                     st.info(f"🔵 Átlagos {context_type} forgalom")
             
             st.markdown('</div>', unsafe_allow_html=True)
-            
+
+            # Vizuális összehasonlítás
+            st.markdown("### 📊 Vizuális összehasonlítás")
+
+            # Összehasonlító diagram
+            comparison_data = pd.DataFrame({
+                'Kategória': ['Globális átlag', f'{context_type.capitalize()} átlag', 'Előrejelzés'],
+                'Látogatószám': [global_avg, context_avg, prediction],
+                'Szín': ['#1f77b4', '#ff7f0e', '#2ca02c']
+            })
+
+            fig = px.bar(comparison_data,
+                        x='Kategória',
+                        y='Látogatószám',
+                        color='Szín',
+                        color_discrete_map={
+                            '#1f77b4': '#1f77b4',  # Kék - globális
+                            '#ff7f0e': '#ff7f0e',  # Narancs - kontextuális
+                            '#2ca02c': '#2ca02c'   # Zöld - előrejelzés
+                        },
+                        title="Látogatószám összehasonlítás")
+
+            fig.update_layout(
+                showlegend=False,
+                height=400,
+                yaxis_title="Látogatószám (fő)",
+                xaxis_title=""
+            )
+
+            # Értékek hozzáadása a oszlopokhoz
+            fig.update_traces(
+                texttemplate='%{y:,.0f}',
+                textposition='outside'
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
             # Részletes kontextus információ
             with st.expander("📊 Részletes statisztikák"):
                 col1, col2 = st.columns(2)
